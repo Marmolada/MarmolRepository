@@ -7,7 +7,7 @@ bool SocketClass::setSocket( const int nrport, const u_int msg, const HWND hwnd 
 
 	if( WSAStartup(MAKEWORD(2,2), &wsaData) != 0)
 	{
-		error_info = "WSAStartup";
+		error_info = WSAGetLastError();
 		WSACleanup();
 		return false;
 	}
@@ -15,7 +15,7 @@ bool SocketClass::setSocket( const int nrport, const u_int msg, const HWND hwnd 
 	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if(sock == INVALID_SOCKET)
 	{
-		error_info = "Socket creating";
+		error_info = WSAGetLastError();
 		WSACleanup();
 		return false;
 	}
@@ -26,33 +26,82 @@ bool SocketClass::setSocket( const int nrport, const u_int msg, const HWND hwnd 
 
 	if(connect(sock, (SOCKADDR*)&target, sizeof(sockaddr_in)) == SOCKET_ERROR)
 	{
+		if(WSAGetLastError() == 10061)
+		{
+			closesocket(sock);
+
+			sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+			if(sock == INVALID_SOCKET)
+			{
+				error_info = WSAGetLastError();
+				WSACleanup();
+				return false;
+			} 
+
+			error_info = WSAGetLastError();
+
+			if(bind(sock, (LPSOCKADDR)&target, sizeof(target)) == SOCKET_ERROR)
+			{
+				error_info = WSAGetLastError();
+				WSACleanup();
+				return false;
+			}
+			listen(sock, SOMAXCONN);
+			status = SERVER;
+		}
+		else
+		{
+			error_info = WSAGetLastError();
+			WSACleanup();
+			return false;
+		}
+	}
+	else
+	{
+		status = CLIENT;
+	}
+	
+	WSAAsyncSelect(sock, hwnd, msg, FD_READ | FD_CONNECT | FD_CLOSE | FD_ACCEPT);
+	return true;
+}
+
+bool SocketClass::resetSocket( const int nrport, const u_int msg, const HWND hwnd )
+{
+	if(status == SERVER)
+	{
+		listen(sock, SOMAXCONN);
+	}
+	else
+	{
 		closesocket(sock);
-		
+
+		SOCKADDR_IN target;
+		target.sin_family = AF_INET;
+		target.sin_port = htons(nrport);
+		target.sin_addr.s_addr = inet_addr("127.0.0.1");
+
 		sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 		if(sock == INVALID_SOCKET)
 		{
-			error_info = "Socket creating";
+			error_info = WSAGetLastError();
 			WSACleanup();
 			return false;
 		} 
 
-		error_info = "Connect";
+		error_info = WSAGetLastError();
 
-		SOCKADDR_IN sock_in;
-		sock_in.sin_family = AF_INET;
-		sock_in.sin_port = htons(nrport);
-		sock_in.sin_addr.s_addr = htonl (INADDR_ANY);
-
-		if(bind(sock, (LPSOCKADDR)&sock_in, sizeof(sock_in)) == SOCKET_ERROR)
+		if(bind(sock, (LPSOCKADDR)&target, sizeof(target)) == SOCKET_ERROR)
 		{
-			error_info = "Bind";
+			error_info = WSAGetLastError();
 			WSACleanup();
 			return false;
 		}
 		listen(sock, SOMAXCONN);
+
+		WSAAsyncSelect(sock, hwnd, msg, FD_READ | FD_CONNECT | FD_CLOSE | FD_ACCEPT);
+		status = SERVER;
 	}
 	
-	WSAAsyncSelect(sock, hwnd, msg, FD_READ | FD_CONNECT | FD_CLOSE | FD_ACCEPT);
 	return true;
 }
 
@@ -67,7 +116,7 @@ bool SocketClass::acceptConnect()
 	return true;
 }
 
-bool SocketClass::sendTo( const char* data, const int len )
+bool SocketClass::sendData( const char* data, const int len )
 {
 	if(send(sock, data, len+1, 0) > 0)
 		return true;
@@ -81,7 +130,7 @@ bool SocketClass::receiveData(char* data, int len)
 	return false;
 }
 
-const char* SocketClass::socketErrorInfo()
+const int SocketClass::socketErrorInfo()
 {
 	return error_info;
 }

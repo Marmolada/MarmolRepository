@@ -21,9 +21,11 @@ BOOL CALLBACK DlgProc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		case WM_INITDIALOG:
 		{
 			if(!sockClass.setSocket(3000, 1045, hwnd))
-				MessageBox(hwnd, sockClass.socketErrorInfo(), "Error", MB_OK); 
+				MessageBox(hwnd, ":c", "Error", MB_OK); 
 			else
+			{
 				MessageBox(hwnd, "Socket set", "Done", MB_OK);
+			}
 		}
 		break;
 
@@ -42,7 +44,7 @@ BOOL CALLBACK DlgProc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 						GetDlgItemText(hwnd, IDC_EDITSEND, data, len+1);
 
-						if(!sockClass.sendTo(data, len))
+						if(!sockClass.sendData(data, len))
 							MessageBox(hwnd, "Unable to send data", "Error", MB_OK);
 
 						char* bufferShown;
@@ -101,6 +103,13 @@ BOOL CALLBACK DlgProc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 				case FD_CONNECT:
 				{
 					MessageBox(hwnd, "Connection Established", "OK", MB_OK);
+				}
+				break;
+
+				case FD_CLOSE:
+				{
+					MessageBox(hwnd, "Connection closed", "OK", MB_OK);
+					sockClass.resetSocket(3000, 1045, hwnd);
 				}
 				break;
 			}
