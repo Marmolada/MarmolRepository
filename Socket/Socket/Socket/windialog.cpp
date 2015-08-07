@@ -62,6 +62,7 @@ BOOL CALLBACK DlgProc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 				case IDC_EXIT:
 				{
 					EndDialog(hwnd, NULL);
+					sockClass.cleanSocket();
 				}
 			}
 		}
@@ -108,8 +109,11 @@ BOOL CALLBACK DlgProc( HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 				case FD_CLOSE:
 				{
-					MessageBox(hwnd, "Connection closed", "OK", MB_OK);
-					sockClass.resetSocket(3000, 1045, hwnd);
+					//MessageBox(hwnd, "Connection closed", "OK", MB_OK);
+					if(!sockClass.resetSocket(3000))
+						MessageBox(hwnd, "Connection closed - not reset", "OK", MB_OK);
+					else
+						MessageBox(hwnd, "Connection closed - reset", "OK", MB_OK);
 				}
 				break;
 			}

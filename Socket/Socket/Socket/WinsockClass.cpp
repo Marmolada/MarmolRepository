@@ -4,6 +4,8 @@ bool SocketClass::setSocket( const int nrport, const u_int msg, const HWND hwnd 
 {
 	WSADATA wsaData;
 	SOCKADDR_IN target;
+	this->hwnd = hwnd;
+	this->msg = msg;
 
 	if( WSAStartup(MAKEWORD(2,2), &wsaData) != 0)
 	{
@@ -38,14 +40,13 @@ bool SocketClass::setSocket( const int nrport, const u_int msg, const HWND hwnd 
 				return false;
 			} 
 
-			error_info = WSAGetLastError();
-
 			if(bind(sock, (LPSOCKADDR)&target, sizeof(target)) == SOCKET_ERROR)
 			{
 				error_info = WSAGetLastError();
 				WSACleanup();
 				return false;
 			}
+
 			listen(sock, SOMAXCONN);
 			status = SERVER;
 		}
@@ -65,13 +66,9 @@ bool SocketClass::setSocket( const int nrport, const u_int msg, const HWND hwnd 
 	return true;
 }
 
-bool SocketClass::resetSocket( const int nrport, const u_int msg, const HWND hwnd )
+bool SocketClass::resetSocket( const int nrport )
 {
-	if(status == SERVER)
-	{
-		listen(sock, SOMAXCONN);
-	}
-	else
+	if(status == CLIENT)
 	{
 		closesocket(sock);
 
@@ -86,9 +83,7 @@ bool SocketClass::resetSocket( const int nrport, const u_int msg, const HWND hwn
 			error_info = WSAGetLastError();
 			WSACleanup();
 			return false;
-		} 
-
-		error_info = WSAGetLastError();
+		}
 
 		if(bind(sock, (LPSOCKADDR)&target, sizeof(target)) == SOCKET_ERROR)
 		{
@@ -96,9 +91,8 @@ bool SocketClass::resetSocket( const int nrport, const u_int msg, const HWND hwn
 			WSACleanup();
 			return false;
 		}
-		listen(sock, SOMAXCONN);
-
 		WSAAsyncSelect(sock, hwnd, msg, FD_READ | FD_CONNECT | FD_CLOSE | FD_ACCEPT);
+		listen(sock, SOMAXCONN);
 		status = SERVER;
 	}
 	
@@ -110,27 +104,72 @@ bool SocketClass::acceptConnect()
 	SOCKADDR_IN from;
 	int len = sizeof(sockaddr_in);
 
-	SOCKET tempsock = accept(sock, (struct sockaddr*)&from, &len);
-
-	sock = tempsock;
+	connect_sock = accept(sock, (struct sockaddr*)&from, &len);
+	WSAAsyncSelect(connect_sock, hwnd, msg, FD_READ | FD_CONNECT | FD_CLOSE | FD_ACCEPT);
 	return true;
 }
 
 bool SocketClass::sendData( const char* data, const int len )
 {
-	if(send(sock, data, len+1, 0) > 0)
-		return true;
-	return false;
+	if(status == SERVER)
+	{
+		if(send(connect_sock, data, len+1, 0) == SOCKET_ERROR)
+		{
+			error_info = WSAGetLastError();
+			WSACleanup();
+			return false;
+		}
+		else
+			return true;
+	}
+	else
+	{
+		if(send(sock, data, len+1, 0) == SOCKET_ERROR)
+		{
+			error_info = WSAGetLastError();
+			WSACleanup();
+			return false;
+		}
+		else
+			return true;
+	}
 }
 
 bool SocketClass::receiveData(char* data, int len)
 {
-	if(recv(sock, data, len-1, 0) > 0)
-		return true;
-	return false;
+	if(status == SERVER)
+	{
+		if(recv(connect_sock, data, len-1, 0) == SOCKET_ERROR)
+		{
+			error_info = WSAGetLastError();
+			WSACleanup();
+			return false;
+		}
+		else
+			return true;
+	}
+	else
+	{
+		if(recv(sock, data, len-1, 0) == SOCKET_ERROR)
+		{
+			error_info = WSAGetLastError();
+			WSACleanup();
+			return false;
+		}
+		else
+			return true;
+	}
 }
 
 const int SocketClass::socketErrorInfo()
 {
 	return error_info;
+}
+
+bool SocketClass::cleanSocket()
+{
+	closesocket(sock);
+	closesocket(connect_sock);
+	WSACleanup();
+	return true;
 }
